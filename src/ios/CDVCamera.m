@@ -437,34 +437,11 @@ static NSString* toBase64(NSData* data) {
 - (void)resultForImage:(CDVPictureOptions*)options info:(NSDictionary*)info completion:(void (^)(CDVPluginResult* res))completion
 {
     CDVPluginResult* result = nil;
-    BOOL saveToPhotoAlbum = options.saveToPhotoAlbum;
     UIImage* image = nil;
 
     switch (options.destinationType) {
         case DestinationTypeNativeUri:
         {
-            NSURL* url = [info objectForKey:UIImagePickerControllerReferenceURL];
-            saveToPhotoAlbum = NO;
-            // If, for example, we use sourceType = Camera, URL might be nil because image is stored in memory.
-            // In this case we must save image to device before obtaining an URI.
-            if (url == nil) {
-                image = [self retrieveImage:info options:options];
-                ALAssetsLibrary* library = [ALAssetsLibrary new];
-                [library writeImageToSavedPhotosAlbum:image.CGImage orientation:(ALAssetOrientation)(image.imageOrientation) completionBlock:^(NSURL *assetURL, NSError *error) {
-                    CDVPluginResult* resultToReturn = nil;
-                    if (error) {
-                        resultToReturn = [CDVPluginResult resultWithStatus:CDVCommandStatus_IO_EXCEPTION messageAsString:[error localizedDescription]];
-                    } else {
-                        NSString* nativeUri = [[self urlTransformer:assetURL] absoluteString];
-                        resultToReturn = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:nativeUri];
-                    }
-                    completion(resultToReturn);
-                }];
-                return;
-            } else {
-                NSString* nativeUri = [[self urlTransformer:url] absoluteString];
-                result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:nativeUri];
-            }
         }
             break;
         case DestinationTypeFileUri:
@@ -499,11 +476,6 @@ static NSString* toBase64(NSData* data) {
             break;
     };
     
-    if (saveToPhotoAlbum && image) {
-        ALAssetsLibrary* library = [ALAssetsLibrary new];
-        [library writeImageToSavedPhotosAlbum:image.CGImage orientation:(ALAssetOrientation)(image.imageOrientation) completionBlock:nil];
-    }
-
     completion(result);
 }
 
@@ -715,11 +687,6 @@ static NSString* toBase64(NSData* data) {
     self.pickerController = nil;
     self.data = nil;
     self.metadata = nil;
-    
-    if (options.saveToPhotoAlbum) {
-        ALAssetsLibrary *library = [ALAssetsLibrary new];
-        [library writeImageDataToSavedPhotosAlbum:self.data metadata:self.metadata completionBlock:nil];
-    }
 }
 
 @end
