@@ -20,6 +20,21 @@
 -->
 # Release Notes
 
+### 2.3.1 (Dec 07, 2016)
+* [CB-12224](https://issues.apache.org/jira/browse/CB-12224) Updated version and RELEASENOTES.md for release 2.3.1
+* Fix missing license headers.
+* [CB-12086](https://issues.apache.org/jira/browse/CB-12086) Regenerate README.md from template
+* Added NSPhotoLibraryUsageDescription parameter to example install command Fixing some usages of NSPhotoLibraryUsageDescriptionentry
+* Updating compat dependency to 1.1.0 or better
+* [CB-11625](https://issues.apache.org/jira/browse/CB-11625) Forgot to add CordovaUri.java to plugin.xml
+* [CB-11625](https://issues.apache.org/jira/browse/CB-11625) Files Provider does not work with Android 4.4.4 or lower, and I have no idea why.  Working around with CordovaUri
+* [CB-11625](https://issues.apache.org/jira/browse/CB-11625) (Android) : Make this work with previous versions of Cordova via cordova-plugin-compat
+* BuildConfig from test project crept in source code thanks to Android Studio, removing
+* [CB-11625](https://issues.apache.org/jira/browse/CB-11625) Managed to get Content Providers to work with a weird mix of Content Providers and non-Content Providers
+* [CB-11625](https://issues.apache.org/jira/browse/CB-11625) Working on fix to API 24 no longer allowing File URIs to be passed across intents
+* [CB-11917](https://issues.apache.org/jira/browse/CB-11917) - Remove pull request template checklist item: "iCLA has been submitted…"
+* [CB-11832](https://issues.apache.org/jira/browse/CB-11832) Incremented plugin version.
+
 ### 2.3.0 (Sep 08, 2016)
 * [CB-11795](https://issues.apache.org/jira/browse/CB-11795) Add 'protective' entry to cordovaDependencies
 * [CB-11661](https://issues.apache.org/jira/browse/CB-11661) Add mandatory **iOS 10** privacy description
