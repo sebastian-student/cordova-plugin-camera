@@ -1064,7 +1064,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             // determine the correct aspect ratio
             int[] widthHeight = calculateAspectRatio(rotatedWidth, rotatedHeight);
 
-
             // Load in the smallest bitmap possible that is closest to the size we want
             options.inJustDecodeBounds = false;
             options.inSampleSize = calculateSampleSize(rotatedWidth, rotatedHeight,  widthHeight[0], widthHeight[1]);
@@ -1122,8 +1121,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
      * @return
      */
     public int[] calculateAspectRatio(int origWidth, int origHeight) {
-        int newWidth = this.targetWidth;
-        int newHeight = this.targetHeight;
+        // fix some OOM
+        // do not upscale image
+        int newWidth = Math.min(this.targetWidth, origWidth);
+        int newHeight = Math.min(this.targetHeight, origHeight);
 
         // If no new width or height were specified return the original bitmap
         if (newWidth <= 0 && newHeight <= 0) {
