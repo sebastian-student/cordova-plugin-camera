@@ -151,7 +151,7 @@
         } else {
             scaleFactor = widthFactor; // scale to fit width
         }
-        if (scaleFactor > 1.0) {
+        if (scaleFactor >= 1.0) {
             // do not upscale image
             return nil;
         }
