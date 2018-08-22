@@ -438,6 +438,7 @@ static NSString* toBase64(NSData* data) {
 - (void)resultForImage:(CDVPictureOptions*)options info:(NSDictionary*)info completion:(void (^)(CDVPluginResult* res))completion
 {
     CDVPluginResult* result = nil;
+    BOOL saveToPhotoAlbum = options.saveToPhotoAlbum;
     UIImage* image = nil;
 
     switch (options.destinationType) {
@@ -476,6 +477,11 @@ static NSString* toBase64(NSData* data) {
         default:
             break;
     };
+
+    if (saveToPhotoAlbum && image) {
+        ALAssetsLibrary* library = [ALAssetsLibrary new];
+        [library writeImageToSavedPhotosAlbum:image.CGImage orientation:(ALAssetOrientation)(image.imageOrientation) completionBlock:nil];
+    }
 
     completion(result);
 }
@@ -688,6 +694,11 @@ static NSString* toBase64(NSData* data) {
     self.pickerController = nil;
     self.data = nil;
     self.metadata = nil;
+
+    if (options.saveToPhotoAlbum) {
+        ALAssetsLibrary *library = [ALAssetsLibrary new];
+        [library writeImageDataToSavedPhotosAlbum:self.data metadata:self.metadata completionBlock:nil];
+    }
 }
 
 @end
