@@ -61,6 +61,7 @@ import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.util.Base64;
 import android.content.pm.PackageManager;
@@ -224,7 +225,12 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
         // SD Card Mounted
         if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-            cache = cordova.getActivity().getExternalCacheDir();
+            // some huawai phones return the dir to the sdcard via Context::getExternalCacheDir()
+            // not the emulated dir use ContextCompat implementation
+            File[] cacheDirs = ContextCompat.getExternalCacheDirs(cordova.getActivity());
+            if(cacheDirs.length != 0){
+                cache = cacheDirs[0];
+            }
         }
         // Use internal storage
         if (cache == null) {
