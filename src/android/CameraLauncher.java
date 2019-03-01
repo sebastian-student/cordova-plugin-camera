@@ -83,13 +83,19 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
     private static final int JPEG = 0;                  // Take a picture of type JPEG
     private static final int PNG = 1;                   // Take a picture of type PNG
-    private static final String JPEG_EXTENSION = ".jpg";
-    private static final String PNG_EXTENSION = ".png";
+    private static final String JPEG_TYPE = "jpg";
+    private static final String PNG_TYPE = "png";
+    private static final String JPEG_EXTENSION = "." + JPEG_TYPE;
+    private static final String PNG_EXTENSION = "." + PNG_TYPE;
     private static final String PNG_MIME_TYPE = "image/png";
     private static final String JPEG_MIME_TYPE = "image/jpeg";
     private static final String GET_PICTURE = "Get Picture";
     private static final String GET_VIDEO = "Get Video";
     private static final String GET_All = "Get All";
+    private static final String CROPPED_URI_KEY = "croppedUri";
+    private static final String IMAGE_URI_KEY = "imageUri";
+
+    private static final String TAKE_PICTURE_ACTION = "takePicture";
     private static final String HUAWEI_MANUFACTURER = "Huawei";
     private static final String EXTRA_FACING_PRE25 = "android.intent.extras.CAMERA_FACING";
     private static final String EXTRA_FRONT_POST25 = "android.intent.extras.LENS_FACING_FRONT";
@@ -149,7 +155,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         this.applicationId = preferences.getString("applicationId", this.applicationId);
 
 
-        if (action.equals("takePicture")) {
+        if (action.equals(TAKE_PICTURE_ACTION)) {
             this.srcType = CAMERA;
             this.destType = FILE_URI;
             this.saveToPhotoAlbum = false;
@@ -363,7 +369,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             PackageManager mPm = this.cordova.getActivity().getPackageManager();
             if(intent.resolveActivity(mPm) != null)
             {
-
                 this.cordova.startActivityForResult((CordovaPlugin) this, intent, (CAMERA + 1) * 16 + returnType + 1);
             }
             else
@@ -407,7 +412,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
         return new File(getTempDirectoryPath(), fileName);
     }
-
 
 
     /**
@@ -691,7 +695,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         // Get filename from uri
         String fileName = realPath != null ?
                 realPath.substring(realPath.lastIndexOf('/') + 1) :
-                "modified." + (this.encodingType == JPEG ? "jpg" : "png");
+                "modified." + (this.encodingType == JPEG ? JPEG_TYPE : PNG_TYPE);
 
         String timeStamp = new SimpleDateFormat(TIME_FORMAT).format(new Date());
         //String fileName = "IMG_" + timeStamp + (this.encodingType == JPEG ? ".jpg" : ".png");
@@ -742,15 +746,15 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         String fileLocation = FileHelper.getRealPath(uri, this.cordova);
         LOG.d(LOG_TAG, "File locaton is: " + fileLocation);
 
-        // If you ask for video or all media type you will automatically get back a file URI
-        // and there will be no attempt to resize any returned data
-        if (this.mediaType != PICTURE) {
+        String uriString = uri.toString();
+        String mimeType = FileHelper.getMimeType(uriString, this.cordova);
+
+        // If you ask for video or the selected file doesn't have JPEG or PNG mime type
+        //  there will be no attempt to resize any returned data
+        if (this.mediaType == VIDEO || !(JPEG_MIME_TYPE.equalsIgnoreCase(mimeType) || PNG_MIME_TYPE.equalsIgnoreCase(mimeType))) {
             this.callbackContext.success(fileLocation);
         }
         else {
-            String uriString = uri.toString();
-            // Get the path to the image. Makes loading so much easier.
-            String mimeType = FileHelper.getMimeType(uriString, this.cordova);
 
             // This is a special case to just return the path as no scaling,
             // rotating, nor compressing needs to be done
@@ -1429,11 +1433,11 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         state.putBoolean("saveToPhotoAlbum", this.saveToPhotoAlbum);
 
         if (this.croppedUri != null) {
-            state.putString("croppedUri", this.croppedUri.toString());
+            state.putString(CROPPED_URI_KEY, this.croppedUri.toString());
         }
 
         if (this.imageUri != null) {
-            state.putString("imageUri", this.imageUri.getFileUri().toString());
+            state.putString(IMAGE_URI_KEY, this.imageUri.getFileUri().toString());
         }
 
         return state;
@@ -1452,30 +1456,29 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         this.correctOrientation = state.getBoolean("correctOrientation");
         this.saveToPhotoAlbum = state.getBoolean("saveToPhotoAlbum");
 
-        if (state.containsKey("croppedUri")) {
-            this.croppedUri = Uri.parse(state.getString("croppedUri"));
+        if (state.containsKey(CROPPED_URI_KEY)) {
+            this.croppedUri = Uri.parse(state.getString(CROPPED_URI_KEY));
         }
 
-        if (state.containsKey("imageUri")) {
+        if (state.containsKey(IMAGE_URI_KEY)) {
             //I have no idea what type of URI is being passed in
-            this.imageUri = new CordovaUri(Uri.parse(state.getString("imageUri")), cordova.getActivity());
+            this.imageUri = new CordovaUri(Uri.parse(state.getString(IMAGE_URI_KEY)), cordova.getActivity());
         }
 
         this.callbackContext = callbackContext;
     }
 
- /*
-  * This is dirty, but it does the job.
-  *
-  * Since the FilesProvider doesn't really provide you a way of getting a URL from the file,
-  * and since we actually need the Camera to create the file for us most of the time, we don't
-  * actually write the file, just generate the location based on a timestamp, we need to get it
-  * back from the Intent.
-  *
-  * However, the FilesProvider preserves the path, so we can at least write to it from here, since
-  * we own the context in this case.
- */
-
+     /*
+      * This is dirty, but it does the job.
+      *
+      * Since the FilesProvider doesn't really provide you a way of getting a URL from the file,
+      * and since we actually need the Camera to create the file for us most of the time, we don't
+      * actually write the file, just generate the location based on a timestamp, we need to get it
+      * back from the Intent.
+      *
+      * However, the FilesProvider preserves the path, so we can at least write to it from here, since
+      * we own the context in this case.
+     */
     private String getFileNameFromUri(Uri uri) {
         return CordovaUri.getFileNameFromUri(uri, this.cordova.getActivity());
     }
