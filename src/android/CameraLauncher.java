@@ -221,9 +221,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
         // SD Card Mounted
         if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-            File[] cacheDirs = ContextCompat.getExternalCacheDirs(cordova.getActivity());
-            if(cacheDirs.length != 0){
-                cache = cacheDirs[0];
+            cache = FileHelper.getExternalCacheDir(cordova.getActivity());
+            if(cache != null){
                 cache = validateExternalCacheDir(cache);
             }
         }
@@ -319,7 +318,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         File photo = createCaptureFile(encodingType);
         this.imageUri = new CordovaUri(FileProvider.getUriForFile(cordova.getActivity(),
                 applicationId + ".provider",
-                photo));
+                photo), cordova.getActivity());
         intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, imageUri.getCorrectUri());
         //We can write to this URI, this will hopefully allow us to write files to get to the next step
         intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
@@ -722,7 +721,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             // rotating, nor compressing needs to be done
             if (this.targetHeight == -1 && this.targetWidth == -1 &&
                     (destType == FILE_URI || destType == NATIVE_URI) && !this.correctOrientation &&
-                    mimeType.equalsIgnoreCase(getMimetypeForFormat(encodingType)))
+                    mimeType != null && mimeType.equalsIgnoreCase(getMimetypeForFormat(encodingType)))
             {
                 this.callbackContext.success(uriString);
             } else {
@@ -1406,7 +1405,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
         if (state.containsKey("imageUri")) {
             //I have no idea what type of URI is being passed in
-            this.imageUri = new CordovaUri(Uri.parse(state.getString("imageUri")));
+            this.imageUri = new CordovaUri(Uri.parse(state.getString("imageUri")), cordova.getActivity());
         }
 
         this.callbackContext = callbackContext;
@@ -1425,13 +1424,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
  */
 
     private String getFileNameFromUri(Uri uri) {
-        String fullUri = uri.toString();
-        String partial_path = fullUri.split("external_files")[1];
-        File external_storage = Environment.getExternalStorageDirectory();
-        String path = external_storage.getAbsolutePath() + partial_path;
-        return path;
-
+        return CordovaUri.getFileNameFromUri(uri, this.cordova.getActivity());
     }
-
-
 }

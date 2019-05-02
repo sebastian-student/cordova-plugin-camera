@@ -19,10 +19,11 @@
 
 package org.apache.cordova.camera;
 
+import android.content.Context;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
-import android.support.v4.content.FileProvider;
+import android.support.v4.content.ContextCompat;
 
 import java.io.File;
 
@@ -43,13 +44,13 @@ public class CordovaUri {
      * We always expect a FileProvider string to be passed in for the file that we create
      *
      */
-    CordovaUri (Uri inputUri)
+    CordovaUri(Uri inputUri, Context context)
     {
         //Determine whether the file is a content or file URI
         if(inputUri.getScheme().equals("content"))
         {
             androidUri = inputUri;
-            fileName = getFileNameFromUri(androidUri);
+            fileName = CordovaUri.getFileNameFromUri(androidUri, context);
             fileUri = Uri.parse("file://" + fileName);
         }
         else
@@ -93,12 +94,33 @@ public class CordovaUri {
   * we own the context in this case.
  */
 
-    private String getFileNameFromUri(Uri uri) {
+    public static String getFileNameFromUri(Uri uri, Context context) {
+        String provider_path = uri.getPathSegments().get(0);
         String fullUri = uri.toString();
-        String partial_path = fullUri.split("external_files")[1];
-        File external_storage = Environment.getExternalStorageDirectory();
-        String path = external_storage.getAbsolutePath() + partial_path;
-        return path;
+        String partial_path = fullUri.split(provider_path)[1];
+        String external_storage = getPathPrefixFromUri(provider_path, context);
+        return new File(external_storage, partial_path).getAbsolutePath();
+    }
 
+    private static String getPathPrefixFromUri(String type, Context context) {
+        File dir;
+        switch (type) {
+            case "external_cache":
+                dir = FileHelper.getExternalCacheDir(context);
+                break;
+            case "external_files_path":
+                dir = FileHelper.getExternalFilesDir(context);
+                break;
+            case "external_files":
+                dir = Environment.getExternalStorageDirectory();
+                break;
+            case "cache":
+                dir = context.getCacheDir();
+                break;
+            default:
+                dir = context.getFilesDir();
+                break;
+        }
+        return dir != null ? dir.getAbsolutePath() : null;
     }
 }
