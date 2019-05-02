@@ -32,7 +32,6 @@ import java.util.Date;
 import org.apache.cordova.BuildHelper;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.CordovaResourceApi;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
@@ -40,11 +39,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import android.Manifest;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
-import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
@@ -58,9 +55,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import android.provider.OpenableColumns;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.util.Base64;
@@ -95,6 +90,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     private static final String GET_PICTURE = "Get Picture";
     private static final String GET_VIDEO = "Get Video";
     private static final String GET_All = "Get All";
+    private static final String HUAWEI_MANUFACTURER = "Huawei";
 
     public static final int PERMISSION_DENIED_ERROR = 20;
     public static final int TAKE_PIC_SEC = 0;
@@ -225,11 +221,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
         // SD Card Mounted
         if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-            // some huawai phones return the dir to the sdcard via Context::getExternalCacheDir()
-            // not the emulated dir use ContextCompat implementation
             File[] cacheDirs = ContextCompat.getExternalCacheDirs(cordova.getActivity());
             if(cacheDirs.length != 0){
                 cache = cacheDirs[0];
+                cache = validateExternalCacheDir(cache);
             }
         }
         // Use internal storage
@@ -240,6 +235,22 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         // Create the cache directory if it doesn't exist
         cache.mkdirs();
         return cache.getAbsolutePath();
+    }
+
+    private File validateExternalCacheDir(File cache) {
+        // some huawai phones return the dir to the sdcard via Context::getExternalCacheDir()
+        // not the emulated dir use ContextCompat implementation
+        // https://stackoverflow.com/a/41309223
+        if(HUAWEI_MANUFACTURER.equalsIgnoreCase(Build.MANUFACTURER)) {
+            try {
+                File cacheFile= new File(cache.getAbsolutePath(), ".TestFile.jpg");
+                FileProvider.getUriForFile(cordova.getActivity(),
+                        applicationId + ".provider", cacheFile);
+            } catch (IllegalArgumentException e){
+                return null;
+            }
+        }
+        return cache;
     }
 
     /**
