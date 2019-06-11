@@ -247,6 +247,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         applicationId + ".provider", cacheFile);
             } catch (IllegalArgumentException e){
                 return null;
+            } catch (NullPointerException e){
+                return null;
             }
         }
         return cache;
