@@ -1249,6 +1249,9 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         int diff = 1;
         Uri contentStore = whichContentStore();
         Cursor cursor = queryImgDB(contentStore);
+        if (cursor == null) {
+            cursor = queryImgDB(android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+        }
         int currentNumOfImages = cursor.getCount();
 
         if (type == FILE_URI && this.saveToPhotoAlbum) {
