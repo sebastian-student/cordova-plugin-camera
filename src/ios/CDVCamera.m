@@ -29,7 +29,6 @@
 #import <ImageIO/CGImageDestination.h>
 #import <MobileCoreServices/UTCoreTypes.h>
 #import <objc/message.h>
-#import <Photos/Photos.h>
 
 #ifndef __CORDOVA_4_0_0
     #import <Cordova/NSData+Base64.h>
@@ -366,45 +365,22 @@ static NSString* toBase64(NSData* data) {
             } else {
                 data = UIImageJPEGRepresentation(image, [options.quality floatValue] / 100.0f);
             }
-            NSDictionary* controllerMetadata = nil;
 
-            if (pickerController.sourceType == UIImagePickerControllerSourceTypeCamera) {
-                controllerMetadata = [info objectForKey:@"UIImagePickerControllerMediaMetadata"];
-            } else if (pickerController.sourceType == UIImagePickerControllerSourceTypePhotoLibrary) {
-                PHAsset* asset = [info objectForKey:@"UIImagePickerControllerPHAsset"];
-                controllerMetadata = [self getImageMetadataFromAsset:asset];
-            }
-            if (controllerMetadata) {
-                NSMutableDictionary *metadata = [[NSMutableDictionary alloc] init];
-                NSMutableDictionary* EXIFDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyExifDictionary]mutableCopy];
-                if (EXIFDictionary)    {
-                    [metadata setObject:EXIFDictionary forKey:(NSString*)kCGImagePropertyExifDictionary];
-                }
-                NSMutableDictionary* TIFFDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyTIFFDictionary]mutableCopy];
-                if (TIFFDictionary) {
-                    [metadata setObject:TIFFDictionary forKey:(NSString*)kCGImagePropertyTIFFDictionary];
-                }
-                NSMutableDictionary* GPSDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyGPSDictionary]mutableCopy];
-                if (GPSDictionary)    {
-                    [metadata setObject:GPSDictionary forKey:(NSString*)kCGImagePropertyGPSDictionary];
-                }
-                if(pickerController.sourceType == UIImagePickerControllerSourceTypeCamera && options.usesGeolocation){
+            if (options.usesGeolocation) {
+                NSDictionary* controllerMetadata = [info objectForKey:@"UIImagePickerControllerMediaMetadata"];
+                if (controllerMetadata) {
                     self.data = data;
-                    self.metadata = metadata;
+                    self.metadata = [[NSMutableDictionary alloc] init];
+
+                    NSMutableDictionary* EXIFDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyExifDictionary]mutableCopy];
+                    if (EXIFDictionary)	{
+                        [self.metadata setObject:EXIFDictionary forKey:(NSString*)kCGImagePropertyExifDictionary];
+                    }
+
                     if (IsAtLeastiOSVersion(@"8.0")) {
                         [[self locationManager] performSelector:NSSelectorFromString(@"requestWhenInUseAuthorization") withObject:nil afterDelay:0];
                     }
                     [[self locationManager] startUpdatingLocation];
-                } else {
-                    CGImageSourceRef sourceImage = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
-                    CFStringRef sourceType = CGImageSourceGetType(sourceImage);
-
-                    CGImageDestinationRef destinationImage = CGImageDestinationCreateWithData((__bridge CFMutableDataRef)data, sourceType, 1, NULL);
-                    CGImageDestinationAddImageFromSource(destinationImage, sourceImage, 0, (__bridge CFDictionaryRef)metadata);
-                    CGImageDestinationFinalize(destinationImage);
-
-                    CFRelease(sourceImage);
-                    CFRelease(destinationImage);
                 }
             }
         }
@@ -412,46 +388,9 @@ static NSString* toBase64(NSData* data) {
         default:
             break;
     };
+
     return data;
 }
-
-/* --------------------------------------------------------------
--- get the metadata of the image from a PHAsset
--------------------------------------------------------------- */
-- (NSDictionary*)getImageMetadataFromAsset:(PHAsset*)asset {
-
-    // get photo info from this asset
-    __block NSDictionary *dict = nil;
-    PHImageRequestOptions *imageRequestOptions = [[PHImageRequestOptions alloc] init];
-    imageRequestOptions.synchronous = YES;
-    [[PHImageManager defaultManager]
-     requestImageDataForAsset:asset
-     options:imageRequestOptions
-     resultHandler: ^(NSData *imageData, NSString *dataUTI, UIImageOrientation orientation, NSDictionary *info) {
-        dict = [self convertImageMetadata:imageData]; // as this imageData is in NSData format so we need a method to convert this NSData into NSDictionary
-     }];
-    return dict;
-}
-
--(NSDictionary*)convertImageMetadata:(NSData*)imageData {
-    CGImageSourceRef imageSource = CGImageSourceCreateWithData((__bridge CFDataRef)(imageData), NULL);
-    if (imageSource) {
-        NSDictionary *options = @{(NSString *)kCGImageSourceShouldCache : [NSNumber numberWithBool:NO]};
-        CFDictionaryRef imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, (__bridge CFDictionaryRef)options);
-        if (imageProperties) {
-            NSDictionary *metadata = (__bridge NSDictionary *)imageProperties;
-            CFRelease(imageProperties);
-            CFRelease(imageSource);
-            NSLog(@"Metadata of selected image%@", metadata);// image metadata after converting NSData into NSDictionary
-            return metadata;
-        }
-        CFRelease(imageSource);
-    }
-
-    NSLog(@"Can't read image metadata");
-    return nil;
-}
-
 
 - (NSString*)tempFilePath:(NSString*)extension
 {
@@ -618,15 +557,15 @@ static NSString* toBase64(NSData* data) {
 
 - (CLLocationManager*)locationManager
 {
-    if (locationManager != nil) {
-        return locationManager;
-    }
+	if (locationManager != nil) {
+		return locationManager;
+	}
 
-    locationManager = [[CLLocationManager alloc] init];
-    [locationManager setDesiredAccuracy:kCLLocationAccuracyNearestTenMeters];
-    [locationManager setDelegate:self];
+	locationManager = [[CLLocationManager alloc] init];
+	[locationManager setDesiredAccuracy:kCLLocationAccuracyNearestTenMeters];
+	[locationManager setDelegate:self];
 
-    return locationManager;
+	return locationManager;
 }
 
 - (void)locationManager:(CLLocationManager*)manager didUpdateToLocation:(CLLocation*)newLocation fromLocation:(CLLocation*)oldLocation
