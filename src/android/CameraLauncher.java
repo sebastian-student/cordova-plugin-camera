@@ -91,6 +91,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     private static final String GET_VIDEO = "Get Video";
     private static final String GET_All = "Get All";
     private static final String HUAWEI_MANUFACTURER = "Huawei";
+    private static final String EXTRA_FACING_PRE25 = "android.intent.extras.CAMERA_FACING";
+    private static final String EXTRA_FRONT_POST25 = "android.intent.extras.LENS_FACING_FRONT";
+    private static final String EXTRA_BACK_POST25 = "android.intent.extras.LENS_FACING_BACK";
+    private static final String EXTRA_USE_FRONT = "android.intent.extra.USE_FRONT_CAMERA";
 
     public static final int PERMISSION_DENIED_ERROR = 20;
     public static final int TAKE_PIC_SEC = 0;
@@ -115,6 +119,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     private boolean correctOrientation;     // Should the pictures orientation be corrected
     private boolean orientationCorrected;   // Has the picture's orientation been corrected
     private boolean allowEdit;              // Should we allow the user to crop the image.
+    private boolean useFrontCamera;         // Should we use the front camera for pictures.
 
     protected final static String[] permissions = { Manifest.permission.CAMERA, Manifest.permission.READ_EXTERNAL_STORAGE , Manifest.permission.WRITE_EXTERNAL_STORAGE};
 
@@ -153,6 +158,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             this.encodingType = JPEG;
             this.mediaType = PICTURE;
             this.mQuality = 50;
+            this.useFrontCamera = false;
 
             //Take the values from the arguments if they're not already defined (this is tricky)
             this.destType = args.getInt(1);
@@ -184,7 +190,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
             try {
                 if (this.srcType == CAMERA) {
-                    this.callTakePicture(destType, encodingType);
+                    this.callTakePicture(destType, encodingType, useFrontCamera);
                 }
                 else if ((this.srcType == PHOTOLIBRARY) || (this.srcType == SAVEDPHOTOALBUM)) {
                     // FIXME: Stop always requesting the permission
@@ -268,7 +274,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
      * @param returnType        Set the type of image to return.
      * @param encodingType           Compression quality hint (0-100: 0=low quality & high compression, 100=compress of max quality)
      */
-    public void callTakePicture(int returnType, int encodingType) {
+    public void callTakePicture(int returnType, int encodingType, boolean useFrontCamera) {
         boolean saveAlbumPermission = PermissionHelper.hasPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
                 && PermissionHelper.hasPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
         boolean takePicturePermission = PermissionHelper.hasPermission(this, Manifest.permission.CAMERA);
@@ -297,7 +303,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         }
 
         if (takePicturePermission && saveAlbumPermission) {
-            takePicture(returnType, encodingType);
+            takePicture(returnType, encodingType, useFrontCamera);
         } else if (saveAlbumPermission && !takePicturePermission) {
             PermissionHelper.requestPermission(this, TAKE_PIC_SEC, Manifest.permission.CAMERA);
         } else if (!saveAlbumPermission && takePicturePermission) {
@@ -308,13 +314,23 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         }
     }
 
-    public void takePicture(int returnType, int encodingType)
+    public void takePicture(int returnType, int encodingType, boolean useFrontCamera)
     {
         // Save the number of images currently on disk for later
         this.numPics = queryImgDB(whichContentStore()).getCount();
 
         // Let's use the intent and see what happens
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+
+        if(useFrontCamera){
+            intent.putExtra(EXTRA_FACING_PRE25, android.hardware.Camera.CameraInfo.CAMERA_FACING_FRONT);
+            intent.putExtra(EXTRA_FRONT_POST25, 1);
+            intent.putExtra(EXTRA_USE_FRONT, true);
+        } else {
+            intent.putExtra(EXTRA_FACING_PRE25, android.hardware.Camera.CameraInfo.CAMERA_FACING_BACK);
+            intent.putExtra(EXTRA_BACK_POST25, 1);
+            intent.putExtra(EXTRA_USE_FRONT, false);
+        }
 
         // Specify file so that large image is captured and returned
         File photo = createCaptureFile(encodingType);
@@ -1353,7 +1369,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         }
         switch (requestCode) {
             case TAKE_PIC_SEC:
-                takePicture(this.destType, this.encodingType);
+                takePicture(this.destType, this.encodingType, this.useFrontCamera);
                 break;
             case SAVE_TO_ALBUM_SEC:
                 this.getImage(this.srcType, this.destType, this.encodingType);
