@@ -21,6 +21,7 @@ package org.apache.cordova.camera;
 import java.io.IOException;
 
 import android.media.ExifInterface;
+import android.os.Build;
 
 public class ExifHelper {
     private String aperture = null;
@@ -42,6 +43,8 @@ public class ExifHelper {
     private String model = null;
     private String orientation = null;
     private String whiteBalance = null;
+    private String datetimeOrg = null;
+    private String datetimeDig = null;
 
     private ExifInterface inFile = null;
     private ExifInterface outFile = null;
@@ -89,6 +92,10 @@ public class ExifHelper {
         this.model = inFile.getAttribute(ExifInterface.TAG_MODEL);
         this.orientation = inFile.getAttribute(ExifInterface.TAG_ORIENTATION);
         this.whiteBalance = inFile.getAttribute(ExifInterface.TAG_WHITE_BALANCE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            this.datetimeOrg = inFile.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL);
+            this.datetimeDig = inFile.getAttribute(ExifInterface.TAG_DATETIME_DIGITIZED);
+        }
     }
 
     /**
@@ -159,6 +166,15 @@ public class ExifHelper {
         if (this.whiteBalance != null) {
             this.outFile.setAttribute(ExifInterface.TAG_WHITE_BALANCE, this.whiteBalance);
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if(this.datetimeOrg != null){
+                this.outFile.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, this.datetimeOrg);
+            }
+            if(this.datetimeDig != null){
+                this.outFile.setAttribute(ExifInterface.TAG_DATETIME_DIGITIZED, this.datetimeDig);
+            }
+        }
+
 
         this.outFile.saveAttributes();
     }
