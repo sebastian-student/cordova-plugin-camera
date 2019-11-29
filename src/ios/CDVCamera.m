@@ -398,15 +398,18 @@ static NSString* toBase64(NSData* data) {
                     }
                     [[self locationManager] startUpdatingLocation];
                 } else {
-                    CGImageSourceRef sourceImage = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+                    NSMutableData* imageDataWithExif = [NSMutableData data];
+                    CGImageSourceRef sourceImage = CGImageSourceCreateWithData((__bridge CFDataRef) data, NULL);
                     CFStringRef sourceType = CGImageSourceGetType(sourceImage);
 
-                    CGImageDestinationRef destinationImage = CGImageDestinationCreateWithData((__bridge CFMutableDataRef)data, sourceType, 1, NULL);
-                    CGImageDestinationAddImageFromSource(destinationImage, sourceImage, 0, (__bridge CFDictionaryRef)metadata);
+                    CGImageDestinationRef destinationImage = CGImageDestinationCreateWithData((__bridge CFMutableDataRef) imageDataWithExif, sourceType, 1, NULL);
+                    CGImageDestinationAddImageFromSource(destinationImage, sourceImage, 0, (__bridge CFDictionaryRef) metadata);
                     CGImageDestinationFinalize(destinationImage);
 
                     CFRelease(sourceImage);
                     CFRelease(destinationImage);
+                    data = nil;
+                    return imageDataWithExif;
                 }
             }
         }
