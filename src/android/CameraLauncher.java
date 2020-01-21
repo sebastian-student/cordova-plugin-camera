@@ -325,11 +325,23 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         if(useFrontCamera){
             intent.putExtra(EXTRA_FACING_PRE25, android.hardware.Camera.CameraInfo.CAMERA_FACING_FRONT);
             intent.putExtra(EXTRA_FRONT_POST25, 1);
-            intent.putExtra(EXTRA_USE_FRONT, true);
+
+            // Fix some issues with e.g. LG devices
+            // https://github.com/jamesmontemagno/MediaPlugin/pull/718
+            boolean isIntentNeeded = intent.getBooleanExtra(EXTRA_USE_FRONT, false);
+            if(isIntentNeeded){
+                intent.putExtra(EXTRA_USE_FRONT, true);
+            }
         } else {
             intent.putExtra(EXTRA_FACING_PRE25, android.hardware.Camera.CameraInfo.CAMERA_FACING_BACK);
             intent.putExtra(EXTRA_BACK_POST25, 1);
-            intent.putExtra(EXTRA_USE_FRONT, false);
+
+            // Fix some issues with e.g. LG devices
+            // https://github.com/jamesmontemagno/MediaPlugin/pull/718
+            boolean isIntentNeeded = intent.getBooleanExtra(EXTRA_USE_FRONT, false);
+            if(isIntentNeeded){
+                intent.putExtra(EXTRA_USE_FRONT, false);
+            }
         }
 
         // Specify file so that large image is captured and returned
