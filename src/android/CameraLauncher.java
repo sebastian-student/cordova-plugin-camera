@@ -317,7 +317,9 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     public void takePicture(int returnType, int encodingType, boolean useFrontCamera)
     {
         // Save the number of images currently on disk for later
-        this.numPics = queryImgDB(whichContentStore()).getCount();
+        Cursor cursor = queryImgDB(whichContentStore());
+        this.numPics = cursor.getCount();
+        cursor.close();
 
         // Let's use the intent and see what happens
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
@@ -1298,8 +1300,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             }
             Uri uri = Uri.parse(contentStore + "/" + id);
             this.cordova.getActivity().getContentResolver().delete(uri, null, null);
-            cursor.close();
         }
+        cursor.close();
     }
 
     /**
