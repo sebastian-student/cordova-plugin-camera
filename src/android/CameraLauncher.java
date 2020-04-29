@@ -1112,12 +1112,21 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             int[] widthHeight = calculateAspectRatio(rotatedWidth, rotatedHeight);
 
             // Load in the smallest bitmap possible that is closest to the size we want
+            int inSampleSize = calculateSampleSize(rotatedWidth, rotatedHeight, widthHeight[0], widthHeight[1]);
+            int powerOfTwoSampleSize = Math.max(1, Integer.highestOneBit(inSampleSize));
             options.inJustDecodeBounds = false;
-            options.inSampleSize = calculateSampleSize(rotatedWidth, rotatedHeight,  widthHeight[0], widthHeight[1]);
-            Bitmap unscaledBitmap = null;
+            options.inSampleSize = powerOfTwoSampleSize;
+            options.inDensity = rotatedWidth;
+            options.inTargetDensity = widthHeight[0] * options.inSampleSize;
+            options.inScaled = options.inTargetDensity > 0 && options.inDensity > 0 && options.inTargetDensity != options.inDensity;
+            if (!options.inScaled) {
+                options.inDensity = options.inTargetDensity = 0;
+            }
+
+            Bitmap scaledBitmap = null;
             try {
                 fileStream = FileHelper.getInputStreamFromUriString(galleryUri.toString(), cordova);
-                unscaledBitmap = BitmapFactory.decodeStream(fileStream, null, options);
+                scaledBitmap = BitmapFactory.decodeStream(fileStream, null, options);
             } finally {
                 if (fileStream != null) {
                     try {
@@ -1127,23 +1136,17 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     }
                 }
             }
-            if (unscaledBitmap == null) {
+            if (scaledBitmap == null) {
                 return null;
             }
 
-            int scaledWidth = (!rotated) ? widthHeight[0] : widthHeight[1];
-            int scaledHeight = (!rotated) ? widthHeight[1] : widthHeight[0];
-
-            Bitmap scaledBitmap = Bitmap.createScaledBitmap(unscaledBitmap, scaledWidth, scaledHeight, true);
-            if (scaledBitmap != unscaledBitmap) {
-                unscaledBitmap.recycle();
-                unscaledBitmap = null;
-            }
             if (this.correctOrientation && (rotate != 0)) {
+                int scaledWidth = (!rotated) ? widthHeight[0] : widthHeight[1];
+                int scaledHeight = (!rotated) ? widthHeight[1] : widthHeight[0];
                 Matrix matrix = new Matrix();
                 matrix.setRotate(rotate);
                 try {
-                    scaledBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight(), matrix, true);
+                    scaledBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0, scaledWidth, scaledHeight, matrix, true);
                     this.orientationCorrected = true;
                 } catch (OutOfMemoryError oom) {
                     this.orientationCorrected = false;
