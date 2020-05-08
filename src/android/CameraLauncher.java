@@ -318,6 +318,9 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     {
         // Save the number of images currently on disk for later
         Cursor cursor = queryImgDB(whichContentStore());
+        if (cursor == null) {
+            cursor = queryImgDB(android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+        }
         this.numPics = cursor.getCount();
         cursor.close();
 
