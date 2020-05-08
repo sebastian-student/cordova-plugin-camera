@@ -1100,11 +1100,9 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
             // Setup target width/height based on orientation
             int rotatedWidth, rotatedHeight;
-            boolean rotated= false;
             if (rotate == 90 || rotate == 270) {
                 rotatedWidth = options.outHeight;
                 rotatedHeight = options.outWidth;
-                rotated = true;
             } else {
                 rotatedWidth = options.outWidth;
                 rotatedHeight = options.outHeight;
@@ -1143,12 +1141,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             }
 
             if (this.correctOrientation && (rotate != 0)) {
-                int scaledWidth = (!rotated) ? widthHeight[0] : widthHeight[1];
-                int scaledHeight = (!rotated) ? widthHeight[1] : widthHeight[0];
                 Matrix matrix = new Matrix();
                 matrix.setRotate(rotate);
                 try {
-                    scaledBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0, scaledWidth, scaledHeight, matrix, true);
+                    scaledBitmap = Bitmap.createBitmap(scaledBitmap, 0, 0, scaledBitmap.getWidth(), scaledBitmap.getHeight(), matrix, true);
                     this.orientationCorrected = true;
                 } catch (OutOfMemoryError oom) {
                     this.orientationCorrected = false;
