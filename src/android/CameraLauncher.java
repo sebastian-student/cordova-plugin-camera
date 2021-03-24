@@ -972,7 +972,14 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, JPEG_MIME_TYPE);
         Uri uri;
         try {
-            uri = this.cordova.getActivity().getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            Uri imageCollection;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                imageCollection = MediaStore.Audio.Media
+                        .getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+            } else {
+                imageCollection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+            }
+            uri = this.cordova.getActivity().getContentResolver().insert(imageCollection, values);
         } catch (RuntimeException e) {
             LOG.d(LOG_TAG, "Can't write to external media storage.");
             try {
@@ -1310,7 +1317,11 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
      */
     private Uri whichContentStore() {
         if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-            return android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                return MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+            } else {
+                return MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+            }
         } else {
             return android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI;
         }
