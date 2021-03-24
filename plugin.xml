@@ -81,7 +81,9 @@
             <clobbers target="CameraPopoverHandle" />
           </js-module>
 
-        <preference name="AndroidXEnabled" value="true" />
+        <config-file target="config.xml" parent="/*">
+            <preference name="AndroidXEnabled" value="true" />
+        </config-file>
         <preference name="ANDROID_SUPPORT_V4_VERSION" default="1.+"/>
         <framework src="androidx.legacy:legacy-support-v4:$ANDROID_SUPPORT_V4_VERSION"/>
 
