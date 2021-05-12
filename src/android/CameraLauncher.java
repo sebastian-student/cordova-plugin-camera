@@ -1287,7 +1287,13 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     private void checkForDuplicateImage(int type) {
         int diff = 1;
         Uri contentStore = whichContentStore();
-        Cursor cursor = queryImgDB(contentStore);
+        Cursor cursor;
+        try {
+            cursor = queryImgDB(contentStore);
+        } catch (java.lang.Exception e){
+            // Ignore exception
+        }
+
         if (cursor == null) {
             cursor = queryImgDB(android.provider.MediaStore.Images.Media.INTERNAL_CONTENT_URI);
         }
@@ -1305,7 +1311,11 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                 id--;
             }
             Uri uri = Uri.parse(contentStore + "/" + id);
-            this.cordova.getActivity().getContentResolver().delete(uri, null, null);
+            try {
+                this.cordova.getActivity().getContentResolver().delete(uri, null, null);
+            } catch (java.lang.Exception e){
+                // Ignore exception
+            }
         }
         cursor.close();
     }
