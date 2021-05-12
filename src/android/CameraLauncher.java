@@ -1287,7 +1287,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     private void checkForDuplicateImage(int type) {
         int diff = 1;
         Uri contentStore = whichContentStore();
-        Cursor cursor;
+        Cursor cursor = null;
         try {
             cursor = queryImgDB(contentStore);
         } catch (java.lang.Exception e){
