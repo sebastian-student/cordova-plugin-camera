@@ -159,7 +159,7 @@ public class FileHelper {
     }
 
     public static String getRealPathFromURI_BelowAPI11(Context context, Uri contentUri) {
-        String[] proj = {MediaStore.Images.Media.DATA};
+        String[] proj = { MediaStore.Images.Media.DATA };
         String result = null;
 
         try {
