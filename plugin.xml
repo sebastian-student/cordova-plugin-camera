@@ -20,18 +20,19 @@
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:rim="http://www.blackberry.com/ns/widgets"
     id="cordova-plugin-camera"
     version="4.0.4-dboho">
     <name>Camera</name>
     <description>Cordova Camera Plugin</description>
     <license>Apache 2.0</license>
     <keywords>cordova,camera</keywords>
-    <repo>https://git-wip-us.apache.org/repos/asf/cordova-plugin-camera.git</repo>
-    <issue>https://issues.apache.org/jira/browse/CB/component/12320645</issue>
+    <repo>https://github.com/apache/cordova-plugin-camera</repo>
+    <issue>https://github.com/apache/cordova-plugin-camera/issues</issue>
 
     <engines>
-        <engine name="cordova-android" version=">=7.0.0" />
+        <engine name="cordova" version=">=9.0.0"/>
+        <engine name="cordova-android" version=">=10.0.0" />
+        <engine name="cordova-ios" version=">=5.1.0" />
     </engines>
 
     <js-module src="www/CameraConstants.js" name="Camera">
@@ -41,8 +42,6 @@
     <js-module src="www/CameraPopoverOptions.js" name="CameraPopoverOptions">
         <clobbers target="CameraPopoverOptions" />
     </js-module>
-
-
 
     <js-module src="www/Camera.js" name="camera">
         <clobbers target="navigator.camera" />
@@ -70,6 +69,24 @@
           </provider>
         </config-file>
 
+        <config-file target="AndroidManifest.xml" parent="/*">
+            <queries>
+                <intent>
+                    <action android:name="android.media.action.IMAGE_CAPTURE" />
+                </intent>
+                <intent>
+                    <action android:name="android.intent.action.GET_CONTENT" />
+                </intent>
+                <intent>
+                    <action android:name="android.intent.action.PICK" />
+                </intent>
+                <intent>
+                    <action android:name="com.android.camera.action.CROP" />
+                    <data android:scheme="content" android:mimeType="image/*"/>
+                </intent>
+            </queries>
+        </config-file>
+
         <source-file src="src/android/CameraLauncher.java" target-dir="src/org/apache/cordova/camera" />
         <source-file src="src/android/CordovaUri.java" target-dir="src/org/apache/cordova/camera" />
         <source-file src="src/android/FileHelper.java" target-dir="src/org/apache/cordova/camera" />
@@ -77,16 +94,12 @@
         <source-file src="src/android/FileProvider.java" target-dir="src/org/apache/cordova/camera" />
         <source-file src="src/android/xml/camera_provider_paths.xml" target-dir="res/xml" />
 
+        <preference name="ANDROIDX_CORE_VERSION" default="1.6.+"/>
+        <framework src="androidx.core:core:$ANDROIDX_CORE_VERSION" />
+
         <js-module src="www/CameraPopoverHandle.js" name="CameraPopoverHandle">
             <clobbers target="CameraPopoverHandle" />
           </js-module>
-
-        <config-file target="config.xml" parent="/*">
-            <preference name="AndroidXEnabled" value="true" />
-        </config-file>
-        <preference name="ANDROID_SUPPORT_V4_VERSION" default="1.+"/>
-        <framework src="androidx.legacy:legacy-support-v4:$ANDROID_SUPPORT_V4_VERSION"/>
-
       </platform>
 
      <!-- ios -->
