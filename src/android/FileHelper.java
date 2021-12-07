@@ -145,6 +145,9 @@ public class FileHelper {
             if (isGooglePhotosUri(uri))
                 return uri.getLastPathSegment();
 
+            if (isFileProviderUri(context, uri))
+                return getFileProviderPath(context, uri);
+
             return getDataColumn(context, uri, null, null);
         }
         // File
@@ -345,5 +348,30 @@ public class FileHelper {
             return filesDirs[0];
         }
         return null;
+
     }
+
+    /**
+     * @param context The Application context
+     * @param uri The Uri is checked by functions
+     * @return Whether the Uri authority is FileProvider
+     */
+    public static boolean isFileProviderUri(final Context context, final Uri uri) {
+        final String packageName = context.getPackageName();
+        final String authority = new StringBuilder(packageName).append(".provider").toString();
+        return authority.equals(uri.getAuthority());
+    }
+
+    /**
+     * @param context The Application context
+     * @param uri The Uri is checked by functions
+     * @return File path or null if file is missing
+     */
+    public static String getFileProviderPath(final Context context, final Uri uri)
+    {
+        final File appDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        final File file = new File(appDir, uri.getLastPathSegment());
+        return file.exists() ? file.toString(): null;
+    }
+
 }
