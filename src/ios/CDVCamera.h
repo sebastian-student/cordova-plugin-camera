@@ -64,7 +64,7 @@ typedef NSUInteger CDVMediaType;
 
 @end
 
-@interface CDVCameraPicker : UIImagePickerController
+@interface CDVCameraPicker : UIImagePickerController <UIAdaptivePresentationControllerDelegate>
 
 @property (strong) CDVPictureOptions* pictureOptions;
 
