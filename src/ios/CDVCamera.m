@@ -200,14 +200,19 @@ static NSString* toBase64(NSData* data) {
                     [[weakSelf pickerController] setPickerPopoverController:nil];
                 }
 
-                if ([weakSelf popoverSupported] && (pictureOptions.sourceType != UIImagePickerControllerSourceTypeCamera)) {
+                if ((pictureOptions.popoverOptions != nil) && [weakSelf popoverSupported] && (pictureOptions.sourceType != UIImagePickerControllerSourceTypeCamera)) {
                     if (cameraPicker.pickerPopoverController == nil) {
                         cameraPicker.pickerPopoverController = [[NSClassFromString(@"UIPopoverController") alloc] initWithContentViewController:cameraPicker];
                     }
                     [weakSelf displayPopover:pictureOptions.popoverOptions];
                     weakSelf.hasPendingOperation = NO;
                 } else {
-                    cameraPicker.modalPresentationStyle = UIModalPresentationCurrentContext;
+                    if (@available(iOS 13.0, *)) {
+                        cameraPicker.modalPresentationStyle = UIModalPresentationAutomatic;
+                        cameraPicker.presentationController.delegate = cameraPicker;
+                    } else {
+                        cameraPicker.modalPresentationStyle = UIModalPresentationCurrentContext;
+                    }
                     [weakSelf.viewController presentViewController:cameraPicker animated:YES completion:^{
                         weakSelf.hasPendingOperation = NO;
                     }];
@@ -784,6 +789,11 @@ static NSString* toBase64(NSData* data) {
 @end
 
 @implementation CDVCameraPicker
+
+- (void)presentationControllerWillDismiss:(UIPresentationController *)presentationController
+{
+    [self.delegate imagePickerControllerDidCancel:self];
+}
 
 - (BOOL)prefersStatusBarHidden
 {
