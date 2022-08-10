@@ -17,6 +17,7 @@
  under the License.
  */
 
+#import <PhotosUI/PhotosUI.h>
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
 #import <CoreLocation/CLLocationManager.h>
@@ -64,6 +65,18 @@ typedef NSUInteger CDVMediaType;
 
 @end
 
+API_AVAILABLE(ios(14))
+@interface CDVGalleryPicker : NSObject <UIAdaptivePresentationControllerDelegate>
+
+@property (strong) PHPickerViewController* pickerViewController;
+
+@property (strong) CDVPictureOptions* pictureOptions;
+@property (copy) NSString* callbackId;
+
++ (instancetype) createFromPictureOptions:(CDVPictureOptions*)options;
+
+@end
+
 @interface CDVCameraPicker : UIImagePickerController <UIAdaptivePresentationControllerDelegate>
 
 @property (strong) CDVPictureOptions* pictureOptions;
@@ -83,10 +96,11 @@ typedef NSUInteger CDVMediaType;
 @interface CDVCamera : CDVPlugin <UIImagePickerControllerDelegate,
                        UINavigationControllerDelegate,
                        UIPopoverControllerDelegate,
-                       CLLocationManagerDelegate>
+                       CLLocationManagerDelegate,
+                       PHPickerViewControllerDelegate>
 {}
-
 @property (strong) CDVCameraPicker* pickerController;
+@property (strong) CDVGalleryPicker* galleryPicker;
 @property (strong) NSMutableDictionary *metadata;
 @property (strong, nonatomic) CLLocationManager *locationManager;
 @property (strong) NSData* data;

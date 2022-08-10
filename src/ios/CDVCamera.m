@@ -30,6 +30,7 @@
 #import <MobileCoreServices/UTCoreTypes.h>
 #import <objc/message.h>
 #import <Photos/Photos.h>
+#import <PhotosUI/PhotosUI.h>
 
 #ifndef __CORDOVA_4_0_0
     #import <Cordova/NSData+Base64.h>
@@ -55,6 +56,30 @@ static NSString* toBase64(NSData* data) {
         return func(data, s3, 0);
     } else {
         return nil;
+    }
+}
+
+NSString* ExtensionFromCDVEncodingType(CDVEncodingType encoding) {
+    switch (encoding) {
+        case EncodingTypeJPEG:
+            return @"jpg";
+        case EncodingTypePNG:
+            return @"png";
+        default:
+            NSCAssert(NO, @"Usage of unsuported case of CDVEncodingType. Retuning 'jpg'.");
+            return @"jpg";
+    }
+}
+
+CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
+    switch (encoding) {
+        case EncodingTypeJPEG:
+            return kUTTypeJPEG;
+        case EncodingTypePNG:
+            return kUTTypePNG;
+        default:
+            NSCAssert(NO, @"Usage of unsuported case of CDVEncodingType. Retuning 'public.jpeg'.");
+            return kUTTypeJPEG;
     }
 }
 
@@ -183,6 +208,26 @@ static NSString* toBase64(NSData* data) {
             }
         }
 
+        if (pictureOptions.sourceType != UIImagePickerControllerSourceTypeCamera &&
+            pictureOptions.allowsEditing == NO &&
+            pictureOptions.destinationType == DestinationTypeFileUri &&
+            pictureOptions.mediaType == MediaTypePicture &&
+            pictureOptions.popoverOptions == nil) {
+            if (@available(iOS 14.0, *)) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    CDVGalleryPicker* picker = [CDVGalleryPicker createFromPictureOptions:pictureOptions];
+                    picker.callbackId = command.callbackId;
+                    weakSelf.galleryPicker = picker;
+                    picker.pickerViewController.delegate = weakSelf;
+                    
+                    [weakSelf.viewController presentViewController:picker.pickerViewController animated:true completion:^{
+                        weakSelf.hasPendingOperation = NO;
+                    }];
+                });
+                return;
+            }
+        }
+        
         [weakSelf requestPhotoPermissions:^(bool auth) {
             // Perform UI operations on the main thread
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -219,7 +264,6 @@ static NSString* toBase64(NSData* data) {
                 }
             });
         }];
-
     }];
 }
 
@@ -382,19 +426,8 @@ static NSString* toBase64(NSData* data) {
                 controllerMetadata = [self getImageMetadataFromAsset:asset];
             }
             if (controllerMetadata) {
-                NSMutableDictionary *metadata = [[NSMutableDictionary alloc] init];
-                NSMutableDictionary* EXIFDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyExifDictionary]mutableCopy];
-                if (EXIFDictionary)    {
-                    [metadata setObject:EXIFDictionary forKey:(NSString*)kCGImagePropertyExifDictionary];
-                }
-                NSMutableDictionary* TIFFDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyTIFFDictionary]mutableCopy];
-                if (TIFFDictionary) {
-                    [metadata setObject:TIFFDictionary forKey:(NSString*)kCGImagePropertyTIFFDictionary];
-                }
-                NSMutableDictionary* GPSDictionary = [[controllerMetadata objectForKey:(NSString*)kCGImagePropertyGPSDictionary]mutableCopy];
-                if (GPSDictionary)    {
-                    [metadata setObject:GPSDictionary forKey:(NSString*)kCGImagePropertyGPSDictionary];
-                }
+                NSMutableDictionary* metadata = [self filterImageMetadataFrom:controllerMetadata];
+                
                 if(pickerController.sourceType == UIImagePickerControllerSourceTypeCamera && options.usesGeolocation){
                     self.data = data;
                     self.metadata = metadata;
@@ -426,6 +459,66 @@ static NSString* toBase64(NSData* data) {
     return data;
 }
 
+- (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results API_AVAILABLE(ios(14)) {
+    __weak CDVCamera* weakSelf = self;
+    
+    [picker dismissViewControllerAnimated:YES completion:^{
+        if (results.count > 0 && [results.firstObject.itemProvider hasItemConformingToTypeIdentifier:(NSString*)kUTTypeImage]) {
+            [results.firstObject.itemProvider loadDataRepresentationForTypeIdentifier:(NSString*)kUTTypeImage completionHandler:^(NSData* data, NSError* error) {
+                UIImage* original = [[UIImage alloc] initWithData:data];
+                UIImage* image = [weakSelf conformImage:original toOptions:weakSelf.galleryPicker.pictureOptions];
+                                
+                NSData* processedImageData = nil;
+                switch (weakSelf.galleryPicker.pictureOptions.encodingType) {
+                    case EncodingTypePNG:
+                        processedImageData = UIImagePNGRepresentation(image);
+                        break;
+                    case EncodingTypeJPEG:
+                        processedImageData = UIImageJPEGRepresentation(image, weakSelf.galleryPicker.pictureOptions.quality.floatValue / 100.0f);
+                        break;
+                    default:
+                        NSAssert(NO, @"Missing implementation for encoding type (fallback to jpg)");
+                        processedImageData = UIImageJPEGRepresentation(image, weakSelf.galleryPicker.pictureOptions.quality.floatValue / 100.0f);
+                }
+                CGImageSourceRef processedImageSource = CGImageSourceCreateWithData((__bridge CFDataRef) processedImageData, NULL);
+                    
+                NSDictionary* completeMetadata = [self convertImageMetadata:data];
+                NSDictionary* metadata = [self filterImageMetadataFrom:completeMetadata];
+                                
+                NSMutableData* imageDataWithExif = [NSMutableData data];
+                CFStringRef fileFormat = kuTTypeFromCDVEncodingType(weakSelf.galleryPicker.pictureOptions.encodingType);
+                                    
+                CGImageDestinationRef destinationImage = CGImageDestinationCreateWithData((__bridge CFMutableDataRef) imageDataWithExif, fileFormat, 1, NULL);
+                CGImageDestinationAddImageFromSource(destinationImage, processedImageSource, 0, (__bridge CFDictionaryRef) metadata);
+                CGImageDestinationFinalize(destinationImage);
+                                    
+                CFRelease(processedImageSource);
+                CFRelease(destinationImage);
+                            
+                NSString* extension = ExtensionFromCDVEncodingType(weakSelf.galleryPicker.pictureOptions.encodingType);
+                NSString* filePath = [self tempFilePath:extension];
+                NSError* err = nil;
+
+                CDVPluginResult* result = nil;
+                if (![imageDataWithExif writeToFile:filePath options:NSAtomicWrite error:&err]) {
+                    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_IO_EXCEPTION messageAsString:[err localizedDescription]];
+                } else {
+                    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[[self urlTransformer:[NSURL fileURLWithPath:filePath]] absoluteString]];
+                }
+                    
+                [weakSelf.commandDelegate sendPluginResult:result callbackId:weakSelf.galleryPicker.callbackId];
+                weakSelf.hasPendingOperation = NO;
+                weakSelf.galleryPicker = nil;
+            }];
+        } else {
+            CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No Image Selected"];
+            [self.commandDelegate sendPluginResult:result callbackId:self.galleryPicker.callbackId];
+            self.hasPendingOperation = NO;
+            self.galleryPicker = nil;
+        }
+    }];
+}
+
 /* --------------------------------------------------------------
 -- get the metadata of the image from a PHAsset
 -------------------------------------------------------------- */
@@ -444,23 +537,34 @@ static NSString* toBase64(NSData* data) {
     return dict;
 }
 
--(NSDictionary*)convertImageMetadata:(NSData*)imageData {
-    CGImageSourceRef imageSource = CGImageSourceCreateWithData((__bridge CFDataRef)(imageData), NULL);
+- (NSDictionary*)accessImageMetadata:(CGImageSourceRef)imageSource {
     if (imageSource) {
         NSDictionary *options = @{(NSString *)kCGImageSourceShouldCache : [NSNumber numberWithBool:NO]};
         CFDictionaryRef imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, (__bridge CFDictionaryRef)options);
         if (imageProperties) {
             NSDictionary *metadata = (__bridge NSDictionary *)imageProperties;
             CFRelease(imageProperties);
-            CFRelease(imageSource);
-            NSLog(@"Metadata of selected image%@", metadata);// image metadata after converting NSData into NSDictionary
+            NSLog(@"Metadata of selected image%@", metadata); // image metadata after converting NSData into NSDictionary
             return metadata;
         }
-        CFRelease(imageSource);
     }
 
     NSLog(@"Can't read image metadata");
     return nil;
+}
+
+-(NSDictionary*)convertImageMetadata:(NSData*)imageData {
+    CGImageSourceRef imageSource = CGImageSourceCreateWithData((__bridge CFDataRef)(imageData), NULL);
+    NSDictionary* metadata = nil;
+    
+    if (imageSource) {
+        metadata = [self accessImageMetadata:imageSource];
+        CFRelease(imageSource);
+    } else {
+        NSLog(@"Failed to create imageSource for metadata access.");
+    }
+    
+    return metadata;
 }
 
 - (void)requestPhotoPermissions:(void (^)(bool auth))completion
@@ -513,22 +617,24 @@ static NSString* toBase64(NSData* data) {
         image = [info objectForKey:UIImagePickerControllerOriginalImage];
     }
 
+    return [self conformImage:image toOptions:options];
+}
+
+- (UIImage*)conformImage:(UIImage*)original toOptions:(CDVPictureOptions*)options {
     if (options.correctOrientation) {
-        image = [image imageCorrectedForCaptureOrientation];
+        original = [original imageCorrectedForCaptureOrientation];
     }
-
+    
     UIImage* scaledImage = nil;
-
     if ((options.targetSize.width > 0) && (options.targetSize.height > 0)) {
-        // if cropToSize, resize image and crop to target size, otherwise resize to fit target without cropping
         if (options.cropToSize) {
-            scaledImage = [image imageByScalingAndCroppingForSize:options.targetSize];
+            scaledImage = [original imageByScalingAndCroppingForSize:options.targetSize];
         } else {
-            scaledImage = [image imageByScalingNotCroppingForSize:options.targetSize];
+            scaledImage = [original imageByScalingNotCroppingForSize:options.targetSize];
         }
     }
 
-    return (scaledImage == nil ? image : scaledImage);
+    return (scaledImage == nil ? original : scaledImage);
 }
 
 - (void)resultForImage:(CDVPictureOptions*)options info:(NSDictionary*)info completion:(void (^)(CDVPluginResult* res))completion
@@ -786,6 +892,24 @@ static NSString* toBase64(NSData* data) {
     self.metadata = nil;
 }
 
+- (NSMutableDictionary*)filterImageMetadataFrom:(NSDictionary*)completeMetadata {
+    NSMutableDictionary* filteredMetadata = [[NSMutableDictionary alloc] init];
+    NSDictionary* exifMetadata = [[completeMetadata objectForKey:(NSString*)kCGImagePropertyExifDictionary] copy];
+    if (exifMetadata) {
+        [filteredMetadata setObject:exifMetadata forKey:(NSString*)kCGImagePropertyExifDictionary];
+    }
+    NSDictionary* tiffMetadata = [[completeMetadata objectForKey:(NSString*)kCGImagePropertyTIFFDictionary] copy];
+    if (tiffMetadata) {
+        [filteredMetadata setObject:tiffMetadata forKey:(NSString*)kCGImagePropertyTIFFDictionary];
+    }
+    NSDictionary* gpsMetadata = [[completeMetadata objectForKey:(NSString*)kCGImagePropertyGPSDictionary] copy];
+    if (gpsMetadata) {
+        [filteredMetadata setObject:gpsMetadata forKey:(NSString*)kCGImagePropertyGPSDictionary];
+    }
+    
+    return filteredMetadata;
+}
+
 @end
 
 @implementation CDVCameraPicker
@@ -835,6 +959,25 @@ static NSString* toBase64(NSData* data) {
     }
 
     return cameraPicker;
+}
+
+@end
+
+@implementation CDVGalleryPicker
+
++ (instancetype) createFromPictureOptions:(CDVPictureOptions*)pictureOptions {
+    CDVGalleryPicker* instance = [[CDVGalleryPicker alloc] init];
+    PHPickerConfiguration* singleImage = [[PHPickerConfiguration alloc] initWithPhotoLibrary:PHPhotoLibrary.sharedPhotoLibrary];
+    singleImage.filter = PHPickerFilter.imagesFilter;
+    singleImage.selectionLimit = 1;
+    instance.pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:singleImage];
+    instance.pickerViewController.presentationController.delegate = instance;
+    return instance;
+}
+
+- (void)presentationControllerWillDismiss:(UIPresentationController *)presentationController {
+    PHPickerViewController* picker = (PHPickerViewController*)self.pickerViewController;
+    [picker.delegate picker:picker didFinishPicking:@[]];
 }
 
 @end
