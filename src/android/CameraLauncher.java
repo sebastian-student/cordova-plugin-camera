@@ -288,7 +288,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     public void callTakePicture(int returnType, int encodingType, boolean useFrontCamera) {
         String[] storagePermissions = getPermissions(true, mediaType);
         boolean saveAlbumPermission;
-        if (this.saveToPhotoAlbum) {
+        if (android.os.Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || this.saveToPhotoAlbum) {
             saveAlbumPermission = hasPermissions(storagePermissions);
         } else {
             saveAlbumPermission = true;
