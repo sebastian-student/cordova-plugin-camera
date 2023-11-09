@@ -967,11 +967,14 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
 
 + (instancetype) createFromPictureOptions:(CDVPictureOptions*)pictureOptions {
     CDVGalleryPicker* instance = [[CDVGalleryPicker alloc] init];
+    instance.pictureOptions = pictureOptions;
+    
     PHPickerConfiguration* singleImage = [[PHPickerConfiguration alloc] initWithPhotoLibrary:PHPhotoLibrary.sharedPhotoLibrary];
     singleImage.filter = PHPickerFilter.imagesFilter;
     singleImage.selectionLimit = 1;
     instance.pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:singleImage];
     instance.pickerViewController.presentationController.delegate = instance;
+    
     return instance;
 }
 
