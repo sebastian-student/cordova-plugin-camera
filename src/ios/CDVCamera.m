@@ -472,7 +472,7 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller
 didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
-    __weak CDVCamera* weakSelf = self;
+    CDVCamera* weakSelf = self;
     
     if (urls.count > 0) {
         NSURL *fileURL = [urls firstObject];
@@ -481,7 +481,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
         NSData *data = [NSData dataWithContentsOfURL:fileURL options:NSDataReadingMappedIfSafe error:&error];
         
         if (error) {
-            [self sendErrorResultWithMessage];
+            [self onEndSelectionWithoutImage];
             return;
         }
         
@@ -489,15 +489,15 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
         UIImage *original = [[UIImage alloc] initWithData:data];
         [self handleImageFromPicker:original withData:data];
     } else {
-        [self sendErrorResultWithMessage];
+        [self onEndSelectionWithoutImage];
     }
 }
 
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller; {
-    [self sendErrorResultWithMessage];
+    [self onEndSelectionWithoutImage];
 }
 
-- (void)sendErrorResultWithMessage {
+- (void)onEndSelectionWithoutImage {
     CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No Image Selected"];
     [self.commandDelegate sendPluginResult:result callbackId:self.galleryPicker.callbackId];
     
@@ -508,7 +508,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
 
 - (void)handleImageFromPicker:(UIImage *)original withData:(NSData *)data {
     
-    __weak CDVCamera* weakSelf = self;
+    CDVCamera* weakSelf = self;
     
     UIImage* image = [weakSelf conformImage:original toOptions:weakSelf.galleryPicker.pictureOptions];
                     
@@ -565,10 +565,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
                 [self handleImageFromPicker:original withData:data];
             }];
         } else {
-            CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No Image Selected"];
-            [self.commandDelegate sendPluginResult:result callbackId:self.galleryPicker.callbackId];
-            self.hasPendingOperation = NO;
-            self.galleryPicker = nil;
+            [self onEndSelectionWithoutImage];
         }
     }];
 }
