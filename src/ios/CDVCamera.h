@@ -68,7 +68,7 @@ typedef NSUInteger CDVMediaType;
 API_AVAILABLE(ios(14))
 @interface CDVGalleryPicker : NSObject <UIAdaptivePresentationControllerDelegate>
 
-@property (strong) PHPickerViewController* pickerViewController;
+@property (strong) UIViewController* pickerViewController;
 
 @property (strong) CDVPictureOptions* pictureOptions;
 @property (copy) NSString* callbackId;
@@ -97,7 +97,8 @@ API_AVAILABLE(ios(14))
                        UINavigationControllerDelegate,
                        UIPopoverControllerDelegate,
                        CLLocationManagerDelegate,
-                       PHPickerViewControllerDelegate>
+                       PHPickerViewControllerDelegate,
+                       UIDocumentPickerDelegate>
 {}
 @property (strong) CDVCameraPicker* pickerController;
 @property (strong) CDVGalleryPicker* galleryPicker;

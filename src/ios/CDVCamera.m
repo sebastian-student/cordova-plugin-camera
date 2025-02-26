@@ -31,6 +31,7 @@
 #import <objc/message.h>
 #import <Photos/Photos.h>
 #import <PhotosUI/PhotosUI.h>
+#import <UniformTypeIdentifiers/UTCoreTypes.h>
 
 #ifndef __CORDOVA_4_0_0
     #import <Cordova/NSData+Base64.h>
@@ -218,7 +219,17 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
                     CDVGalleryPicker* picker = [CDVGalleryPicker createFromPictureOptions:pictureOptions];
                     picker.callbackId = command.callbackId;
                     weakSelf.galleryPicker = picker;
-                    picker.pickerViewController.delegate = weakSelf;
+                    
+                    if ([picker.pickerViewController isKindOfClass:[PHPickerViewController class]]) {
+                        PHPickerViewController* controller = (PHPickerViewController*) picker.pickerViewController;
+                        controller.delegate = weakSelf;
+                    } else if ([picker.pickerViewController isKindOfClass:[UIDocumentPickerViewController class]]) {
+                        UIDocumentPickerViewController* controller = (UIDocumentPickerViewController*) picker.pickerViewController;
+                        controller.delegate = weakSelf;
+                    } else {
+                        NSLog(@"FIA: no class matched");
+                    }
+                    
                     
                     [weakSelf.viewController presentViewController:picker.pickerViewController animated:true completion:^{
                         weakSelf.hasPendingOperation = NO;
@@ -459,62 +470,102 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
     return data;
 }
 
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
+    CDVCamera* weakSelf = self;
+    
+    if (urls.count > 0) {
+        NSURL *fileURL = [urls firstObject];
+        
+        NSError *error;
+        NSData *data = [NSData dataWithContentsOfURL:fileURL options:NSDataReadingMappedIfSafe error:&error];
+        
+        if (error) {
+            [self onEndSelectionWithoutImage];
+            return;
+        }
+        
+        // Create a UIImage from the data
+        UIImage *original = [[UIImage alloc] initWithData:data];
+        [self handleImageFromPicker:original withData:data];
+    } else {
+        [self onEndSelectionWithoutImage];
+    }
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller; {
+    [self onEndSelectionWithoutImage];
+}
+
+- (void)onEndSelectionWithoutImage {
+    CDVPluginResult *result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No Image Selected"];
+    [self.commandDelegate sendPluginResult:result callbackId:self.galleryPicker.callbackId];
+    
+    // Reset any pending operation state
+    self.hasPendingOperation = NO;
+    self.galleryPicker = nil;
+}
+
+- (void)handleImageFromPicker:(UIImage *)original withData:(NSData *)data {
+    
+    CDVCamera* weakSelf = self;
+    
+    UIImage* image = [weakSelf conformImage:original toOptions:weakSelf.galleryPicker.pictureOptions];
+                    
+    NSData* processedImageData = nil;
+    switch (weakSelf.galleryPicker.pictureOptions.encodingType) {
+        case EncodingTypePNG:
+            processedImageData = UIImagePNGRepresentation(image);
+            break;
+        case EncodingTypeJPEG:
+            processedImageData = UIImageJPEGRepresentation(image, weakSelf.galleryPicker.pictureOptions.quality.floatValue / 100.0f);
+            break;
+        default:
+            NSAssert(NO, @"Missing implementation for encoding type (fallback to jpg)");
+            processedImageData = UIImageJPEGRepresentation(image, weakSelf.galleryPicker.pictureOptions.quality.floatValue / 100.0f);
+    }
+    CGImageSourceRef processedImageSource = CGImageSourceCreateWithData((__bridge CFDataRef) processedImageData, NULL);
+        
+    NSDictionary* completeMetadata = [self convertImageMetadata:data];
+    NSDictionary* metadata = [self filterImageMetadataFrom:completeMetadata];
+                    
+    NSMutableData* imageDataWithExif = [NSMutableData data];
+    CFStringRef fileFormat = kuTTypeFromCDVEncodingType(weakSelf.galleryPicker.pictureOptions.encodingType);
+                        
+    CGImageDestinationRef destinationImage = CGImageDestinationCreateWithData((__bridge CFMutableDataRef) imageDataWithExif, fileFormat, 1, NULL);
+    CGImageDestinationAddImageFromSource(destinationImage, processedImageSource, 0, (__bridge CFDictionaryRef) metadata);
+    CGImageDestinationFinalize(destinationImage);
+                        
+    CFRelease(processedImageSource);
+    CFRelease(destinationImage);
+                
+    NSString* extension = ExtensionFromCDVEncodingType(weakSelf.galleryPicker.pictureOptions.encodingType);
+    NSString* filePath = [self tempFilePath:extension];
+    NSError* err = nil;
+
+    CDVPluginResult* result = nil;
+    if (![imageDataWithExif writeToFile:filePath options:NSAtomicWrite error:&err]) {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_IO_EXCEPTION messageAsString:[err localizedDescription]];
+    } else {
+        result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[[self urlTransformer:[NSURL fileURLWithPath:filePath]] absoluteString]];
+    }
+        
+    [weakSelf.commandDelegate sendPluginResult:result callbackId:weakSelf.galleryPicker.callbackId];
+    weakSelf.hasPendingOperation = NO;
+    weakSelf.galleryPicker = nil;
+}
+
 - (void)picker:(PHPickerViewController *)picker didFinishPicking:(NSArray<PHPickerResult *> *)results API_AVAILABLE(ios(14)) {
-    __weak CDVCamera* weakSelf = self;
+    
     
     [picker dismissViewControllerAnimated:YES completion:^{
         if (results.count > 0 && [results.firstObject.itemProvider hasItemConformingToTypeIdentifier:(NSString*)kUTTypeImage]) {
             [results.firstObject.itemProvider loadDataRepresentationForTypeIdentifier:(NSString*)kUTTypeImage completionHandler:^(NSData* data, NSError* error) {
                 UIImage* original = [[UIImage alloc] initWithData:data];
-                UIImage* image = [weakSelf conformImage:original toOptions:weakSelf.galleryPicker.pictureOptions];
-                                
-                NSData* processedImageData = nil;
-                switch (weakSelf.galleryPicker.pictureOptions.encodingType) {
-                    case EncodingTypePNG:
-                        processedImageData = UIImagePNGRepresentation(image);
-                        break;
-                    case EncodingTypeJPEG:
-                        processedImageData = UIImageJPEGRepresentation(image, weakSelf.galleryPicker.pictureOptions.quality.floatValue / 100.0f);
-                        break;
-                    default:
-                        NSAssert(NO, @"Missing implementation for encoding type (fallback to jpg)");
-                        processedImageData = UIImageJPEGRepresentation(image, weakSelf.galleryPicker.pictureOptions.quality.floatValue / 100.0f);
-                }
-                CGImageSourceRef processedImageSource = CGImageSourceCreateWithData((__bridge CFDataRef) processedImageData, NULL);
-                    
-                NSDictionary* completeMetadata = [self convertImageMetadata:data];
-                NSDictionary* metadata = [self filterImageMetadataFrom:completeMetadata];
-                                
-                NSMutableData* imageDataWithExif = [NSMutableData data];
-                CFStringRef fileFormat = kuTTypeFromCDVEncodingType(weakSelf.galleryPicker.pictureOptions.encodingType);
-                                    
-                CGImageDestinationRef destinationImage = CGImageDestinationCreateWithData((__bridge CFMutableDataRef) imageDataWithExif, fileFormat, 1, NULL);
-                CGImageDestinationAddImageFromSource(destinationImage, processedImageSource, 0, (__bridge CFDictionaryRef) metadata);
-                CGImageDestinationFinalize(destinationImage);
-                                    
-                CFRelease(processedImageSource);
-                CFRelease(destinationImage);
-                            
-                NSString* extension = ExtensionFromCDVEncodingType(weakSelf.galleryPicker.pictureOptions.encodingType);
-                NSString* filePath = [self tempFilePath:extension];
-                NSError* err = nil;
-
-                CDVPluginResult* result = nil;
-                if (![imageDataWithExif writeToFile:filePath options:NSAtomicWrite error:&err]) {
-                    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_IO_EXCEPTION messageAsString:[err localizedDescription]];
-                } else {
-                    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[[self urlTransformer:[NSURL fileURLWithPath:filePath]] absoluteString]];
-                }
-                    
-                [weakSelf.commandDelegate sendPluginResult:result callbackId:weakSelf.galleryPicker.callbackId];
-                weakSelf.hasPendingOperation = NO;
-                weakSelf.galleryPicker = nil;
+                [self handleImageFromPicker:original withData:data];
             }];
         } else {
-            CDVPluginResult* result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"No Image Selected"];
-            [self.commandDelegate sendPluginResult:result callbackId:self.galleryPicker.callbackId];
-            self.hasPendingOperation = NO;
-            self.galleryPicker = nil;
+            [self onEndSelectionWithoutImage];
         }
     }];
 }
@@ -969,11 +1020,23 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
     CDVGalleryPicker* instance = [[CDVGalleryPicker alloc] init];
     instance.pictureOptions = pictureOptions;
     
-    PHPickerConfiguration* singleImage = [[PHPickerConfiguration alloc] initWithPhotoLibrary:PHPhotoLibrary.sharedPhotoLibrary];
-    singleImage.filter = PHPickerFilter.imagesFilter;
-    singleImage.selectionLimit = 1;
-    instance.pickerViewController = [[PHPickerViewController alloc] initWithConfiguration:singleImage];
-    instance.pickerViewController.presentationController.delegate = instance;
+    NSProcessInfo *processInfo = [NSProcessInfo processInfo];
+    
+    if ((processInfo.isMacCatalystApp || processInfo.iOSAppOnMac)) {
+        // Running on macOS under Mac Catalyst, use UIDocumentPickerViewController for image selection
+        UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeImage]];
+        documentPicker.allowsMultipleSelection = NO;
+        instance.pickerViewController = documentPicker; // Store as generic view controller
+        instance.pickerViewController.presentationController.delegate = instance;
+    } else {
+        // Use PHPickerViewController for image selection
+        PHPickerConfiguration* singleImage = [[PHPickerConfiguration alloc] initWithPhotoLibrary:PHPhotoLibrary.sharedPhotoLibrary];
+        singleImage.filter = PHPickerFilter.imagesFilter;
+        singleImage.selectionLimit = 1;
+        PHPickerViewController *photoPicker = [[PHPickerViewController alloc] initWithConfiguration:singleImage];
+        instance.pickerViewController = photoPicker; // Store as generic view controller
+        instance.pickerViewController.presentationController.delegate = instance;
+    }
     
     return instance;
 }
