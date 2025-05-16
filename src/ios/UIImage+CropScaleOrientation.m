@@ -21,6 +21,44 @@
 
 @implementation UIImage (CropScaleOrientation)
 
+- (UIImage*)imageStandardizedWithOrientation:(bool)reorient
+{
+    NSDictionary* imageOptions = nil;
+    
+    if (reorient) {
+        CGImagePropertyOrientation orientation = CGImagePropertyOrientationForUIImageOrientation(self.imageOrientation);
+        
+        imageOptions = @{
+            kCIImageApplyOrientationProperty : @true,
+            kCIImageProperties : @{
+                (__bridge NSString*)kCGImagePropertyOrientation : @(orientation)
+            }
+        };
+    }
+    
+    CIImage* reorientated = [[CIImage alloc]
+        initWithImage:self
+        options:imageOptions
+    ];
+    
+    CIContext* context = [CIContext contextWithOptions:nil];
+    CGImageRef colorCorrected = [context
+        createCGImage:reorientated
+        fromRect:[reorientated extent]
+        format:kCIFormatRGBA8
+        colorSpace:CGColorSpaceCreateWithName(kCGColorSpaceSRGB)
+    ];
+    
+    if (!colorCorrected) {
+        return nil;
+    }
+    
+    UIImage* standardized = [UIImage imageWithCGImage:colorCorrected];
+    CGImageRelease(colorCorrected);
+    
+    return standardized;
+}
+
 - (UIImage*)imageByScalingAndCroppingForSize:(CGSize)targetSize
 {
     UIImage* sourceImage = self;
@@ -54,73 +92,129 @@
             thumbnailPoint.x = (targetWidth - scaledWidth) * 0.5;
         }
     }
-    
-    UIGraphicsBeginImageContext(targetSize); // this will crop
-    
+        
     CGRect thumbnailRect = CGRectZero;
     thumbnailRect.origin = thumbnailPoint;
     thumbnailRect.size.width = scaledWidth;
     thumbnailRect.size.height = scaledHeight;
+
+    CGFloat scale = [UIScreen mainScreen].scale;
+    CGColorSpaceRef colorSpace = CGImageGetColorSpace(sourceImage.CGImage);
+    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(sourceImage.CGImage);
     
-    [sourceImage drawInRect:thumbnailRect];
+    CGContextRef context = CGBitmapContextCreate(
+        NULL,
+        targetSize.width,
+        targetSize.height,
+        CGImageGetBitsPerComponent(sourceImage.CGImage),
+        0,
+        colorSpace,
+        bitmapInfo
+    );
+
+    if (!context) {
+        // this will ignore color space used in source and probably fallback to sRGB
+        NSLog(@"Falling back to UIGraphicsImageContext: propably ignoring color profile");
+        UIGraphicsBeginImageContext(targetSize);
+        context = UIGraphicsGetCurrentContext();
+    }
+
+    CGContextDrawImage(context, thumbnailRect, sourceImage.CGImage);
+
+    CGImageRef cgImage = CGBitmapContextCreateImage(context);
+    newImage = [UIImage
+        imageWithCGImage:cgImage
+        scale:scale
+        orientation:UIImageOrientationUp
+    ];
     
-    newImage = UIGraphicsGetImageFromCurrentImageContext();
     if (newImage == nil) {
-        NSLog(@"could not scale image");
+        NSLog(@"could not scale and crop image");
     }
     
-    // pop the context to get back to the default
+    CGImageRelease(cgImage);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    
+    UIGraphicsPopContext();
     UIGraphicsEndImageContext();
+    
     return newImage;
 }
 
 - (UIImage*)imageCorrectedForCaptureOrientation:(UIImageOrientation)imageOrientation
 {
-    float rotation_radians = 0;
-    bool perpendicular = false;
+    float rotationInRadiens = 0;
+    bool aspectChange = false;
     
     switch (imageOrientation) {
         case UIImageOrientationUp :
-            rotation_radians = 0.0;
+            rotationInRadiens = 0.0;
             break;
             
         case UIImageOrientationDown:
-            rotation_radians = M_PI; // don't be scared of radians, if you're reading this, you're good at math
+            rotationInRadiens = M_PI; // don't be scared of radians, if you're reading this, you're good at math
             break;
             
         case UIImageOrientationRight:
-            rotation_radians = M_PI_2;
-            perpendicular = true;
+            rotationInRadiens = -M_PI_2;
+            aspectChange = true;
             break;
             
         case UIImageOrientationLeft:
-            rotation_radians = -M_PI_2;
-            perpendicular = true;
+            rotationInRadiens = M_PI_2;
+            aspectChange = true;
             break;
             
         default:
             break;
     }
     
-    UIGraphicsBeginImageContext(CGSizeMake(self.size.width, self.size.height));
-    CGContextRef context = UIGraphicsGetCurrentContext();
+    CGImageRef sourceImage = self.CGImage;
+
+    CGColorSpaceRef colorSpace = CGImageGetColorSpace(sourceImage);
+    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(sourceImage);
     
-    // Rotate around the center point
-    CGContextTranslateCTM(context, self.size.width / 2, self.size.height / 2);
-    CGContextRotateCTM(context, rotation_radians);
+    CGSize bitmapSize = aspectChange ? CGSizeMake(self.size.height, self.size.width) : self.size;
+    NSLog(@"Got image size %@ and bitmap size %@", NSStringFromCGSize(bitmapSize), NSStringFromCGSize(bitmapSize));
     
-    CGContextScaleCTM(context, 1.0, -1.0);
-    float width = perpendicular ? self.size.height : self.size.width;
-    float height = perpendicular ? self.size.width : self.size.height;
-    CGContextDrawImage(context, CGRectMake(-width / 2, -height / 2, width, height), [self CGImage]);
-    
-    // Move the origin back since the rotation might've change it (if its 90 degrees)
-    if (perpendicular) {
-        CGContextTranslateCTM(context, -self.size.height / 2, -self.size.width / 2);
+    CGContextRef context = CGBitmapContextCreate(
+        NULL,
+        self.size.width,
+        self.size.height,
+        CGImageGetBitsPerComponent(sourceImage),
+        0,
+        colorSpace,
+        bitmapInfo
+    );
+
+    if (!context) {
+        // this will ignore color space used in source and probably fallback to sRGB
+        NSLog(@"Falling back to UIGraphicsImageContext: propably ignoring color profile");
+        UIGraphicsBeginImageContext(self.size);
+        context = UIGraphicsGetCurrentContext();
     }
     
-    UIImage* newImage = UIGraphicsGetImageFromCurrentImageContext();
+    CGContextTranslateCTM(context, self.size.width/2, self.size.height/2);
+    CGContextRotateCTM(context, rotationInRadiens);
+    
+    CGRect drawRect = CGRectMake(-bitmapSize.width/2, -bitmapSize.height/2, bitmapSize.width, bitmapSize.height);
+    CGContextDrawImage(context, drawRect, self.CGImage);
+    
+    CGImageRef rotatedImageRef = CGBitmapContextCreateImage(context);
+    UIImage *newImage = [UIImage imageWithCGImage:rotatedImageRef scale:self.scale orientation:UIImageOrientationUp];
+    
+    if (newImage == nil) {
+        NSLog(@"could not rotate image");
+    }
+
+    CGImageRelease(rotatedImageRef);
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    
+    UIGraphicsPopContext();
     UIGraphicsEndImageContext();
+
     return newImage;
 }
 
@@ -162,18 +256,56 @@
     scaledSize.width = (int)scaledSize.width;
     scaledSize.height = (int)scaledSize.height;
     
-    UIGraphicsBeginImageContext(scaledSize); // this will resize
+    CGColorSpaceRef colorSpace = CGImageGetColorSpace(sourceImage.CGImage);
+    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(sourceImage.CGImage);
     
-    [sourceImage drawInRect:CGRectMake(0, 0, scaledSize.width, scaledSize.height)];
+    CGContextRef context = CGBitmapContextCreate(
+        NULL,
+        scaledSize.width,
+        scaledSize.height,
+        CGImageGetBitsPerComponent(sourceImage.CGImage),
+        0,
+        colorSpace,
+        bitmapInfo
+    );
+
+    if (!context) {
+        // this will ignore color space used in source and probably fallback to sRGB
+        NSLog(@"Falling back to UIGraphicsImageContext: propably ignoring color profile");
+        UIGraphicsBeginImageContext(scaledSize);
+        context = UIGraphicsGetCurrentContext();
+    }
     
-    newImage = UIGraphicsGetImageFromCurrentImageContext();
+    CGRect drawRect = CGRectMake(0, 0, scaledSize.width, scaledSize.height);
+    CGContextDrawImage(context, drawRect, self.CGImage);
+    
+    CGImageRef rotatedImageRef = CGBitmapContextCreateImage(context);
+    newImage = [UIImage imageWithCGImage:rotatedImageRef scale:self.scale orientation:UIImageOrientationUp];
+    
     if (newImage == nil) {
         NSLog(@"could not scale image");
     }
     
-    // pop the context to get back to the default
+    CGContextRelease(context);
+    CGColorSpaceRelease(colorSpace);
+    
+    UIGraphicsPopContext();
     UIGraphicsEndImageContext();
+    
     return newImage;
+}
+
+CGImagePropertyOrientation CGImagePropertyOrientationForUIImageOrientation(UIImageOrientation orientation) {
+    switch (orientation) {
+        case UIImageOrientationUp: return kCGImagePropertyOrientationUp;
+        case UIImageOrientationDown: return kCGImagePropertyOrientationDown;
+        case UIImageOrientationLeft: return kCGImagePropertyOrientationLeft;
+        case UIImageOrientationRight: return kCGImagePropertyOrientationRight;
+        case UIImageOrientationUpMirrored: return kCGImagePropertyOrientationUpMirrored;
+        case UIImageOrientationDownMirrored: return kCGImagePropertyOrientationDownMirrored;
+        case UIImageOrientationLeftMirrored: return kCGImagePropertyOrientationLeftMirrored;
+        case UIImageOrientationRightMirrored: return kCGImagePropertyOrientationRightMirrored;
+    }
 }
 
 @end

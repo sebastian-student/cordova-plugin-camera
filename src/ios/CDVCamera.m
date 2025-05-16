@@ -242,13 +242,13 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
         [weakSelf requestPhotoPermissions:^(bool auth) {
             // Perform UI operations on the main thread
             dispatch_async(dispatch_get_main_queue(), ^{
-		        CDVCameraPicker* cameraPicker = [CDVCameraPicker createFromPictureOptions:pictureOptions];
-		        weakSelf.pickerController = cameraPicker;
+                CDVCameraPicker* cameraPicker = [CDVCameraPicker createFromPictureOptions:pictureOptions];
+                weakSelf.pickerController = cameraPicker;
 
-		        cameraPicker.delegate = weakSelf;
-		        cameraPicker.callbackId = command.callbackId;
-		        // we need to capture this state for memory warnings that dealloc this object
-		        cameraPicker.webView = weakSelf.webView;
+                cameraPicker.delegate = weakSelf;
+                cameraPicker.callbackId = command.callbackId;
+                // we need to capture this state for memory warnings that dealloc this object
+                cameraPicker.webView = weakSelf.webView;
                 // If a popover is already open, close it; we only want one at a time.
                 if (([[weakSelf pickerController] pickerPopoverController] != nil) && [[[weakSelf pickerController] pickerPopoverController] isPopoverVisible]) {
                     [[[weakSelf pickerController] pickerPopoverController] dismissPopoverAnimated:YES];
@@ -472,8 +472,6 @@ CFStringRef kuTTypeFromCDVEncodingType(CDVEncodingType encoding) {
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller
 didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
-    CDVCamera* weakSelf = self;
-    
     if (urls.count > 0) {
         NSURL *fileURL = [urls firstObject];
         
@@ -671,19 +669,34 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
     return [self conformImage:image toOptions:options];
 }
 
-- (UIImage*)conformImage:(UIImage*)original toOptions:(CDVPictureOptions*)options {
-    if (options.correctOrientation) {
-        original = [original imageCorrectedForCaptureOrientation];
-    }
+- (void)logImageManipulationStep:(UIImage*)image named:(NSString*)name {
+    NSString* cache = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES).firstObject;
+    NSString* path = [cache stringByAppendingPathComponent:name];
     
+    NSError *imageError = nil;
+    NSData *imageData = UIImageJPEGRepresentation(image, 1.00f);
+    [imageData writeToFile:path options:NSDataWritingAtomic error:&imageError];
+}
+
+- (UIImage*)conformImage:(UIImage*)original toOptions:(CDVPictureOptions*)options {
+    // [self logImageManipulationStep:original named:@"a-original.jpg"];
+    
+    UIImage* standardized = [original imageStandardizedWithOrientation:options.correctOrientation];
+    if (!standardized) {
+        NSLog(@"Image standardization failed. Continuing with original.");
+        standardized = original;
+    }
+    [self logImageManipulationStep:standardized named:@"b-standardized.jpg"];
+
     UIImage* scaledImage = nil;
     if ((options.targetSize.width > 0) && (options.targetSize.height > 0)) {
         if (options.cropToSize) {
-            scaledImage = [original imageByScalingAndCroppingForSize:options.targetSize];
+            scaledImage = [standardized imageByScalingAndCroppingForSize:options.targetSize];
         } else {
-            scaledImage = [original imageByScalingNotCroppingForSize:options.targetSize];
+            scaledImage = [standardized imageByScalingNotCroppingForSize:options.targetSize];
         }
     }
+    // [self logImageManipulationStep:scaledImage named:@"c-scaled.jpg"];
 
     return (scaledImage == nil ? original : scaledImage);
 }
@@ -810,15 +823,15 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
 
 - (CLLocationManager*)locationManager
 {
-	if (locationManager != nil) {
-		return locationManager;
-	}
+    if (locationManager != nil) {
+        return locationManager;
+    }
 
-	locationManager = [[CLLocationManager alloc] init];
-	[locationManager setDesiredAccuracy:kCLLocationAccuracyNearestTenMeters];
-	[locationManager setDelegate:self];
+    locationManager = [[CLLocationManager alloc] init];
+    [locationManager setDesiredAccuracy:kCLLocationAccuracyNearestTenMeters];
+    [locationManager setDelegate:self];
 
-	return locationManager;
+    return locationManager;
 }
 
 - (void)locationManager:(CLLocationManager*)manager didUpdateToLocation:(CLLocation*)newLocation fromLocation:(CLLocation*)oldLocation

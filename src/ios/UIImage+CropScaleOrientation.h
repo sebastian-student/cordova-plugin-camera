@@ -21,6 +21,7 @@
 
 @interface UIImage (CropScaleOrientation)
 
+- (UIImage*)imageStandardizedWithOrientation:(bool)reorient;
 - (UIImage*)imageByScalingAndCroppingForSize:(CGSize)targetSize;
 - (UIImage*)imageCorrectedForCaptureOrientation;
 - (UIImage*)imageCorrectedForCaptureOrientation:(UIImageOrientation)imageOrientation;
