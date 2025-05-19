@@ -686,7 +686,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls; {
         NSLog(@"Image standardization failed. Continuing with original.");
         standardized = original;
     }
-    [self logImageManipulationStep:standardized named:@"b-standardized.jpg"];
+    // [self logImageManipulationStep:standardized named:@"b-standardized.jpg"];
 
     UIImage* scaledImage = nil;
     if ((options.targetSize.width > 0) && (options.targetSize.height > 0)) {
